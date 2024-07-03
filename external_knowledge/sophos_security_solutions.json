@@ -1,0 +1,75 @@
+{
+  "soluzioni_sophos": {
+    "protezione_endpoint": {
+      "nome": "Sophos Intercept X",
+      "descrizione": "Protezione avanzata degli endpoint che combina tecnologie di deep learning e anti-exploit.",
+      "caratteristiche": [
+        "Protezione anti-ransomware",
+        "Rilevamento e risposta gestiti (MDR)",
+        "Prevenzione degli exploit",
+        "Analisi delle cause profonde"
+      ]
+    },
+    "sicurezza_rete": {
+      "nome": "Sophos Firewall",
+      "descrizione": "Firewall di nuova generazione che offre visibilità, protezione e risposta per la rete.",
+      "funzionalità": [
+        "Protezione contro le minacce avanzate",
+        "VPN sicura",
+        "Controllo delle applicazioni",
+        "Ottimizzazione SD-WAN"
+      ]
+    },
+    "cloud_security": {
+      "nome": "Sophos Cloud Optix",
+      "descrizione": "Soluzione di sicurezza cloud che offre visibilità, rilevamento delle minacce e risposta.",
+      "vantaggi": [
+        "Inventario e visualizzazione delle risorse cloud",
+        "Valutazione continua della conformità",
+        "Rilevamento delle minacce basato sull'IA",
+        "Automazione della sicurezza"
+      ]
+    },
+    "email_security": {
+      "nome": "Sophos Email",
+      "descrizione": "Protezione avanzata delle email contro phishing, malware e spam.",
+      "caratteristiche": [
+        "Protezione contro il phishing basata sull'IA",
+        "Crittografia delle email",
+        "Prevenzione della perdita di dati (DLP)",
+        "Sandboxing per allegati sospetti"
+      ]
+    }
+  },
+  "servizi_gestiti": {
+    "nome": "Sophos Managed Threat Response (MTR)",
+    "descrizione": "Servizio di rilevamento e risposta alle minacce gestito 24/7 da esperti Sophos.",
+    "componenti": [
+      "Monitoraggio proattivo delle minacce",
+      "Analisi delle minacce",
+      "Risposta guidata agli incidenti",
+      "Ricerca proattiva delle minacce"
+    ]
+  },
+  "approccio_sicurezza": {
+    "nome": "Sophos Synchronized Security",
+    "descrizione": "Approccio che integra prodotti di sicurezza diversi per una protezione più efficace.",
+    "benefici": [
+      "Condivisione delle informazioni tra prodotti",
+      "Risposta automatizzata alle minacce",
+      "Visibilità unificata attraverso Sophos Central"
+    ]
+  },
+  "settori_focus": [
+    "Istruzione",
+    "Sanità",
+    "Piccole e medie imprese",
+    "Servizi finanziari",
+    "Governo e settore pubblico"
+  ],
+  "risorse_educative": {
+    "blog": "https://news.sophos.com/it-it/",
+    "whitepaper": "https://www.sophos.com/it-it/content/whitepaper-hub",
+    "webinar": "https://www.sophos.com/it-it/content/webinars"
+  }
+}

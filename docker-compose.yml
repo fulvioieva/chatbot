@@ -1,0 +1,10 @@
+version: '3'
+services:
+  chatbot:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./external_knowledge:/app/external_knowledge
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
