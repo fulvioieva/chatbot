@@ -3,6 +3,7 @@
 from flask import Flask, request, jsonify
 import anthropic
 import os
+import re
 from knowledge_base import KnowledgeBase
 from bot_behavior import BOT_INSTRUCTIONS
 from followup_manager import FollowUpManager
@@ -42,11 +43,12 @@ def chat():
 
     # Prepara il prompt con la conversazione completa
     conversation_history = "\n".join([f"{'Utente' if msg['is_user'] else 'Assistente'}: {msg['content']}" for msg in conversation])
-    full_prompt = f"{BOT_INSTRUCTIONS}\n\n{context}\n\nStorico della conversazione:\n{conversation_history}\n\nRisposta:"
+    full_prompt = f"{BOT_INSTRUCTIONS}\n\n{context}\n\nStorico della conversazione:\n{conversation_history}\n\nAssistente: Fornisci solo la tua risposta, non simulare domande o risposte dell'utente."
 
     response = client.messages.create(
         model="claude-3-sonnet-20240229",
         max_tokens=1000,
+		temperature=0.1,
         messages=[
             {"role": "user", "content": full_prompt}
         ]
@@ -54,11 +56,18 @@ def chat():
 
     bot_response = response.content[0].text
 
+	# Rimuovi eventuali parti della risposta che simulano l'input dell'utente
+    bot_response = re.sub(r'Utente:.*', '', bot_response, flags=re.DOTALL)
+    bot_response = bot_response.strip()
+	
     # Aggiungi la risposta del bot alla conversazione
     conversation_manager.add_message(user_name, bot_response, is_user=False)
 
     # Verifica se il problema è stato risolto
-    if "non è stato risolto" in bot_response.lower() or "contattare il supporto" in bot_response.lower():
+    if "non è stato risolto" in user_message.lower() 
+	or "non ho risolto" in user_message.lower() 
+	or "secure2.sophos.com/it-it/support/contact-support.aspx" in bot_response.lower()
+	or "www.sophos.com/support" in bot_response.lower():
         if user_name not in followup_manager.get_followup_list():
             followup_manager.add_to_followup(user_name, user_message)
             bot_response += "\n\nHo aggiunto il tuo nominativo alla lista per un follow-up da parte di un operatore."
