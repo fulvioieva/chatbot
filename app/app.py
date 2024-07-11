@@ -118,8 +118,10 @@ def chat():
         keywords = ['malware', 'virus', 'spyware']
         is_malware_related = any(keyword in user_message.lower() for keyword in keywords)
         if is_malware_related:
+            logger.info('Malware, Virus, Spyware')
             context = handle_malware_related(user_name)
         else:
+            logger.info('Other problems')
             context = handle_other_requests(user_message)
 
     conversation_history = "\n".join([f"{'Utente' if msg['is_user'] else 'Assistente'}: {msg['content']}" for msg in conversation])
