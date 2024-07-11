@@ -9,7 +9,9 @@ from bot_behavior import BOT_INSTRUCTIONS
 from followup_manager import FollowUpManager
 from conversation_manager import ConversationManager
 from email_leak_checker import check_email_leak
+from ip_checker import check_ip
 import json
+import logging
 
 app = Flask(__name__)
 client = anthropic.Client(api_key=os.environ.get('ANTHROPIC_API_KEY'))
@@ -25,8 +27,30 @@ def chat():
     conversation_manager.add_message(user_name, user_message, is_user=True)
     conversation = conversation_manager.get_conversation(user_name)
     
+	# Verifica se l'utente chiede di contattare l'assistenza tecnica
+    if any(keyword in user_message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana' , 'assistenza cyber', 'bisogno di assistenza']):
+        logging.info('Richiesta assistenza') 
+        if user_name not in followup_manager.get_followup_list():
+            followup_manager.add_to_followup(user_name, user_message)
+            bot_response = "Ho registrato la tua richiesta di assistenza. Un operatore ti contatterà al più presto. Grazie per la tua pazienza."
+        else:
+            bot_response = "La tua richiesta di assistenza è già stata registrata. Un operatore ti contatterà al più presto. Grazie per la tua pazienza."
+        
+        conversation_manager.add_message(user_name, bot_response, is_user=False)
+        return jsonify({"response": bot_response})
+	
     # Verifica se il messaggio riguarda problemi di email
-    if ('email' in user_message.lower() or 'mail' in user_message.lower()) and ('problema' in user_message.lower() or 'controllo' in user_message.lower()):
+    keywordsmail = ['mail', 'email', 'mail?','email?','posta','posta?']
+    is_mail_related = any(keywordmail in user_message.lower() for keywordmail in keywordsmail)	
+	# Verifica se il messaggio riguarda il controllo di un indirizzo IP
+    ip_match = re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', user_message)
+    if ip_match:
+	    logging.info('ipcheck related') 
+        ip_address = ip_match.group(0)
+        ip_info = check_ip(ip_address)
+        context = f"Informazioni sull'indirizzo IP {ip_address}:\n{json.dumps(ip_info, indent=2)}"
+    elif is_mail_related:
+        logging.info('Email related') 
         # Estrai l'indirizzo email dal messaggio dell'utente
         email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', user_message)
         if email_match:
@@ -34,16 +58,18 @@ def chat():
             leak_result = check_email_leak(email)
             context = f"Risultato del controllo email leak per {email}:\n{json.dumps(leak_result, indent=2)}"
         else:
-            context = "Non è stato possibile identificare un indirizzo email nel messaggio. Per favore, fornisci un indirizzo email valido."
+            context = "L'utente non ha fornito una mail valida chiedi di inserire una mail per poterla controllare"
     else:
         # Usa la logica esistente per altri tipi di domande
         keywords = ['malware', 'virus', 'spyware']
         is_malware_related = any(keyword in user_message.lower() for keyword in keywords)
 
         if is_malware_related:
-            with open('/app/external_knowledge/sophos_interceptx_malware_guide.json', 'r') as f:
+            logging.info('Malware related') 
+            failed_attempts = conversation_manager.get_failed_attempts(user_name)
+            with open('/app/external_knowledge/interceptx_malware_guide.json', 'r') as f:
                 intercept_x_info = json.load(f)
-            context = "Informazioni su Sophos Intercept X:\n"
+            context = "Informazioni su Intercept X:\n"
             context += json.dumps(intercept_x_info, indent=2)
         else:
             relevant_info = kb.get_relevant_info(user_message)
@@ -55,8 +81,9 @@ def chat():
 
     response = client.messages.create(
         model="claude-3-sonnet-20240229",
-        max_tokens=1000,
+        max_tokens=500,
 		temperature=0.1,
+		top_k=10,
         messages=[
             {"role": "user", "content": full_prompt}
         ]
@@ -64,19 +91,28 @@ def chat():
 
     bot_response = response.content[0].text
 	
+  # Verifica se il problema è stato risolto
+    if "non è stato risolto" in user_message.lower() or "non ho risolto" in user_message.lower() or "da un operatore" in user_message.lower():
+        conversation_manager.increment_failed_attempts(user_name)
+        failed_attempts = conversation_manager.get_failed_attempts(user_name)
+        
+        if failed_attempts >= 2:  # Puoi modificare questo numero secondo le tue esigenze
+            if user_name not in followup_manager.get_followup_list():
+                followup_manager.add_to_followup(user_name, user_message)
+                bot_response += "\n\nHo notato che stai avendo difficoltà a risolvere il problema. Ho aggiunto il tuo nominativo alla lista per assistenza da parte di un operatore."
+                conversation_manager.reset_failed_attempts(user_name)
+        else:
+            bot_response += f"\n\nSe il problema persiste, prova a fornire più dettagli o a riformulare la tua domanda. Questo è il tentativo numero {failed_attempts}."
+    else:
+        conversation_manager.reset_failed_attempts(user_name)
+		
 	# Rimuovi eventuali parti della risposta che simulano l'input dell'utente
     bot_response = re.sub(r'Utente:.*', '', bot_response, flags=re.DOTALL)
     bot_response = bot_response.strip()
 	
     # Aggiungi la risposta del bot alla conversazione
-    conversation_manager.add_message(user_name, bot_response, is_user=False)
-
-    # Verifica se il problema è stato risolto
-    if "non è stato risolto" in user_message.lower() or "non ho risolto" in user_message.lower() or "secure2.sophos.com/it-it/support/contact-support.aspx" in bot_response.lower() or "www.sophos.com/support" in bot_response.lower():
-        if user_name not in followup_manager.get_followup_list():
-            followup_manager.add_to_followup(user_name, user_message)
-            bot_response += "\n\nHo aggiunto il tuo nominativo alla lista per un follow-up da parte di un operatore."
-
+    conversation_manager.add_message(user_name, bot_response, is_user=False)		
+		
     return jsonify({"response": bot_response})
 
 @app.route('/followup-list', methods=['GET'])

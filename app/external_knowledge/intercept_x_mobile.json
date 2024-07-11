@@ -1,6 +1,6 @@
 {
-  "Sophos_Intercept_X_Mobile": {
-    "descrizione": "Sophos Intercept X per dispositivi mobili è una soluzione di sicurezza avanzata che protegge smartphone e tablet da minacce come malware, phishing e perdita di dati.",
+  "Intercept_X_Mobile": {
+    "descrizione": "Intercept X per dispositivi mobili è una soluzione di sicurezza avanzata che protegge smartphone e tablet da minacce come malware, phishing e perdita di dati.",
     "piattaforme_supportate": [
       "Android",
       "iOS"
@@ -62,7 +62,7 @@
       ]
     },
     "best_practices": [
-      "Mantenere sempre aggiornata l'app Sophos Intercept X",
+      "Mantenere sempre aggiornata l'app Intercept X",
       "Eseguire scansioni regolari del dispositivo",
       "Utilizzare la VPN quando ci si connette a reti Wi-Fi pubbliche",
       "Prestare attenzione alle autorizzazioni richieste dalle app",
@@ -81,11 +81,6 @@
         "problema": "VPN non si connette",
         "soluzione": "Controllare la connessione internet e le impostazioni di rete del dispositivo"
       }
-    ],
-    "risorse_aggiuntive": {
-      "documentazione_utente": "https://docs.sophos.com/esg/sixm-android/help/en-us/index.html",
-      "supporto_tecnico": "https://support.sophos.com/support/s/",
-      "video_tutorial": "https://www.sophos.com/it-it/medialibrary/PDFs/factsheets/sophos-mobile-dsna.pdf"
-    }
+    ]
   }
 }

@@ -1,0 +1,32 @@
+{
+  "knowledge_base": [
+    {
+      "domanda": "Quali sono le migliori pratiche per proteggere il mio smartphone da malware?",
+      "risposta": "Per proteggere il tuo smartphone da malware, segui queste pratiche:  1. Scarica app solo da fonti ufficiali come Google Play Store o Apple App Store. 2. Mantieni il sistema operativo e le app aggiornate. 3. Utilizza un software antivirus affidabile. 4. Non cliccare su link sospetti in email o messaggi. 5. Evita di connetterti a reti Wi-Fi pubbliche non protette."
+    },
+    {
+      "domanda": "Come posso proteggere i miei dati personali sul mio dispositivo mobile?",
+      "risposta": "Per proteggere i tuoi dati personali sul dispositivo mobile, puoi:  1. Abilitare l'autenticazione a due fattori (2FA) per i tuoi account. 2. Utilizzare password complesse e diverse per ogni account. 3. Abilitare il blocco dello schermo con PIN, impronta digitale o riconoscimento facciale. 4. Critta i dati sensibili memorizzati sul tuo dispositivo. 5. Fare backup regolari dei tuoi dati importanti."
+    },
+    {
+      "domanda": "Cosa dovrei fare se penso che il mio dispositivo mobile sia stato compromesso?",
+      "risposta": "Se pensi che il tuo dispositivo mobile sia stato compromesso:  1. Disconnettiti immediatamente da tutte le reti e disattiva il Wi-Fi e i dati mobili. 2. Esegui una scansione completa con un software antivirus. 3. Cambia tutte le password dei tuoi account online. 4. Contatta il supporto del produttore del dispositivo per assistenza. 5. Ripristina il dispositivo alle impostazioni di fabbrica se il problema persiste."
+    },
+    {
+      "domanda": "Quali sono i segnali di un possibile attacco di phishing sul mio dispositivo mobile?",
+      "risposta": "I segnali di un possibile attacco di phishing includono:  1. Email o messaggi sospetti che richiedono informazioni personali o finanziarie. 2. Link che ti reindirizzano a siti web che sembrano legittimi ma hanno URL strani. 3. Messaggi che contengono errori grammaticali o ortografici. 4. Richieste urgenti o minacciose che ti chiedono di agire immediatamente. 5. Notifiche inaspettate da app o servizi che non utilizzi."
+    },
+    {
+      "domanda": "Come posso prevenire il furto di identità utilizzando il mio smartphone?",
+      "risposta": "Per prevenire il furto di identità utilizzando il tuo smartphone:  1. Non condividere informazioni personali sensibili tramite messaggi o email. 2. Abilita l'autenticazione a due fattori (2FA) sui tuoi account. 3. Usa app di gestione delle password per creare e memorizzare password complesse. 4. Controlla regolarmente i tuoi estratti conto bancari e segnala immediatamente attività sospette. 5. Utilizza servizi di monitoraggio del credito per rilevare eventuali furti di identità."
+    },
+    {
+      "domanda": "Quali sono le pratiche di sicurezza per utilizzare le app di mobile banking?",
+      "risposta": "Per utilizzare le app di mobile banking in modo sicuro:  1. Scarica le app solo da fonti ufficiali. 2. Abilita l'autenticazione a due fattori (2FA) per il tuo account bancario. 3. Evita di accedere all'app di mobile banking su reti Wi-Fi pubbliche. 4. Verifica regolarmente le tue transazioni bancarie per rilevare eventuali attività sospette. 5. Mantieni l'app di mobile banking aggiornata all'ultima versione."
+    },
+    {
+      "domanda": "Cosa devo fare se perdo il mio smartphone?",
+      "risposta": "Se perdi il tuo smartphone:  1. Utilizza le funzionalità di localizzazione del dispositivo per cercare di recuperarlo. 2. Blocca il dispositivo da remoto utilizzando le impostazioni di sicurezza del sistema operativo. 3. Cancella i dati del dispositivo da remoto se non riesci a recuperarlo. 4. Cambia tutte le password dei tuoi account online. 5. Contatta il tuo operatore telefonico per sospendere la SIM e impedire l'uso non autorizzato."
+    }
+  ]
+}

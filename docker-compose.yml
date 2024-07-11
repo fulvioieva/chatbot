@@ -1,10 +1,16 @@
-version: '3'
+version: '3.8'
+
 services:
-  chatbot:
+  web:
     build: .
     ports:
       - "5000:5000"
-    volumes:
-      - ./external_knowledge:/app/external_knowledge
     environment:
+      - DEBUG=${DEBUG}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - KNOWLEDGE_BASE_PATH=${KNOWLEDGE_BASE_PATH}
+      - MAX_REQUESTS=${MAX_REQUESTS}
+      - REQUEST_WINDOW=${REQUEST_WINDOW}
+    volumes:
+      - ./app:/app
+      - ./external_knowledge:/app/external_knowledge
