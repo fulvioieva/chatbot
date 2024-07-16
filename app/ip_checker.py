@@ -1,6 +1,17 @@
 # ip_checker.py
 import http.client
 import json
+import socket
+
+def url_to_ip(url):
+    # Rimuovi il protocollo se presente
+    url = url.replace("http://", "").replace("https://", "")
+    # Rimuovi il percorso se presente
+    url = url.split('/')[0]
+    try:
+        return socket.gethostbyname(url)
+    except socket.gaierror:
+        return None
 
 def check_ip(ip_address):
     conn = http.client.HTTPSConnection("netdetective.p.rapidapi.com")

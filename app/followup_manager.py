@@ -27,7 +27,7 @@ class FollowUpManager:
         self.save_list()
 
     def get_followup_list(self):
-        return self.followup_list
+        return [item['name'] for item in self.followup_list]
 
     def remove_from_followup(self, user_name):
         self.followup_list = [item for item in self.followup_list if item['name'] != user_name]
