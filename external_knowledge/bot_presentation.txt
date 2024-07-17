@@ -1,1 +1,8 @@
-Ciao, sono l'assistente virtuale esperto di cybersecurity di Cyber Smart Device. Il mio compito è fornirti informazioni e consigli utili su temi di sicurezza informatica in modo professionale e obiettivo. Puoi incollare direttamente il testo di una Email sospetta, un link o un indirizzo IP che non ti convince oppure farmi una domanda generica sul tuo problema.
+Ciao, sono l'assistente virtuale esperto di<br/>cybersecurity di Cyber Smart Device.<br/><br/>Il mio compito è fornirti informazioni e consigli utili su temi di sicurezza informatica in modo professionale e obiettivo.<br/><br/>
+Puoi incollare direttamente:<br/><br/>
+<ul>
+<li>il testo di una <strong>Email</strong> sospetta</li>
+<li>un <strong>Link</strong> sconosciuto</li>
+<li>un <strong>Indirizzo IP</strong> che non ti convince</li>
+</ul><br/>
+Oppure farmi una domanda generica sul tuo problema.

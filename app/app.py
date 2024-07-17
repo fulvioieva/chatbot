@@ -205,7 +205,7 @@ def chat():
         if context != "email_check" or "Risultato del controllo email leak" in bot_response:
             context_messages = conversation_manager.get_context(user_name)['messages']
             conversation_history = "\n".join([f"{'Utente' if i % 2 == 0 else 'Assistente'}: {msg}" for i, msg in enumerate(context_messages)])
-            full_prompt = f"{BOT_INSTRUCTIONS}\n\nContesto corrente: {context}\n\nStorico della conversazione:\n{conversation_history}\n\nAssistente: Fornisci solo la tua risposta, non simulare domande o risposte dell'utente."
+            full_prompt = f"{BOT_INSTRUCTIONS}\n\nContesto corrente: {context}\n\nStorico della conversazione:\n{conversation_history}\n\nAssistente: Fornisci solo la tua risposta, non simulare domande o risposte dell'utente. Se stai facendo una lista trasformala in una lista ordinata HTML e se un link è presente trasformalo in un link HTML che apre un'altra pagina. Non dire che è richiesto il formato HTML"
 
         # Ottieni la risposta da Claude
         response = client.messages.create(
@@ -228,12 +228,14 @@ def chat():
             if failed_attempts >= 2:
                 if user_name not in followup_manager.get_followup_list():
                     followup_manager.add_to_followup(user_name, user_message)
-                    bot_response += "\n\nHo notato che stai avendo difficoltà a risolvere il problema. Ho aggiunto il tuo nominativo alla lista per assistenza da parte di un operatore."
+                    bot_response = "\n\nHo notato che stai avendo difficoltà a risolvere il problema. Ho aggiunto il tuo nominativo alla lista per assistenza da parte di un operatore."
                     conversation_manager.reset_failed_attempts(user_name)
                     conversation_manager.clear_context(user_name)
                     logger.info(f"Utente {user_name}: Richiesta assistenza umana dopo ripetuti tentativi falliti")
+                else:
+                    logger.info(f"Utente {user_name}: Houston abbiamo un problema")
             else:
-                bot_response += f"\n\nSe il problema persiste, prova a fornire più dettagli o a riformulare la tua domanda. Questo è il tuo tentativo numero {failed_attempts}."
+                bot_response = f"\n\nSe il problema persiste, prova a fornire più dettagli o a riformulare la tua domanda."
                 logger.info(f"Utente {user_name}: Tentativo fallito numero {failed_attempts}")
         else:
             conversation_manager.reset_failed_attempts(user_name)
@@ -306,6 +308,11 @@ def check_for_updates():
     # Logica per verificare gli aggiornamenti disponibili
     updates = check_sophos_updates()
     return jsonify(updates)	
+	
+@app.route('/debug/failed-attempts', methods=['GET'])
+@error_handler
+def debug_failed_attempts():
+    return jsonify(conversation_manager.failed_attempts)
 	
 if __name__ == '__main__':
     app.run(debug=DEBUG, host='0.0.0.0')

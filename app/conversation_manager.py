@@ -1,5 +1,6 @@
 # conversation_manager.py
 import json
+import logging
 from datetime import datetime
 
 class ConversationContext:
@@ -47,8 +48,9 @@ class ConversationManager:
             del self.failed_attempts[user_name]
 
     def increment_failed_attempts(self, user_name):
-        self.failed_attempts[user_name] = self.failed_attempts.get(user_name, 0) + 1
-
+        current_attempts = self.failed_attempts.get(user_name, 0)
+        self.failed_attempts[user_name] = current_attempts + 1
+        
     def get_failed_attempts(self, user_name):
         return self.failed_attempts.get(user_name, 0)
 
