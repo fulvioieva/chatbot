@@ -7,10 +7,17 @@ class ConversationContext:
     def __init__(self):
         self.current_topic = None
         self.topic_messages = []
+        self.repeat_count = 0  # Aggiungiamo questo contatore
 
     def set_topic(self, topic):
+        if self.current_topic == topic:
+            self.repeat_count += 1
+        else:
+            self.repeat_count = 0
         self.current_topic = topic
-        self.topic_messages = []
+        if self.repeat_count >= 3:
+            self.topic_messages = []
+            self.repeat_count = 0
 
     def add_message(self, message):
         self.topic_messages.append(message)
@@ -18,12 +25,14 @@ class ConversationContext:
     def get_context(self):
         return {
             "topic": self.current_topic,
-            "messages": self.topic_messages
+            "messages": self.topic_messages,
+            "repeat_count": self.repeat_count
         }
 
     def clear(self):
         self.current_topic = None
         self.topic_messages = []
+        self.repeat_count = 0
 
 class ConversationManager:
     def __init__(self):
@@ -65,8 +74,14 @@ class ConversationManager:
             self.contexts = {}
         if user_name not in self.contexts:
             self.contexts[user_name] = ConversationContext()
+        
         self.contexts[user_name].set_topic(topic)
-
+        
+        # Se il contesto è stato ripetuto 3 volte, lo svuotiamo
+        if self.contexts[user_name].repeat_count >= 3:
+            self.clear_context_messages(user_name)
+            logging.info(f"Utente {user_name}: History del contesto svuotata dopo 3 ripetizioni")
+			
     def add_context_message(self, user_name, message):
         if hasattr(self, 'contexts') and user_name in self.contexts:
             self.contexts[user_name].add_message(message)
@@ -83,3 +98,8 @@ class ConversationManager:
     def clear_context_messages(self, user_name):
         if user_name in self.contexts:
            self.contexts[user_name].topic_messages = []
+
+    def get_context_repeat_count(self, user_name):
+        if hasattr(self, 'contexts') and user_name in self.contexts:
+            return self.contexts[user_name].repeat_count
+        return 0		   

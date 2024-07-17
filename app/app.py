@@ -128,7 +128,7 @@ def chat():
         
         conversation_manager.add_message(user_name, user_message, is_user=True)
         current_context = conversation_manager.get_context(user_name)
-
+			
         # Gestisci la richiesta di presentazione
         if user_message.lower() in ["ciao, presentati in 2 righe!", "presentati", "chi sei?"]:
             bot_response = get_bot_presentation()
@@ -149,6 +149,21 @@ def chat():
             else:
                 return "general"
 
+        new_context = determine_context(user_message)
+        conversation_manager.set_context(user_name, new_context)
+
+        context = conversation_manager.get_context(user_name)
+        repeat_count = conversation_manager.get_context_repeat_count(user_name)
+
+        logger.info(f"Utente {user_name}: Contesto - {new_context}, Ripetizioni: {repeat_count}")
+
+        if repeat_count == 0:
+            logger.info(f"Utente {user_name}: Nuovo contesto impostato - {new_context}")
+        elif repeat_count >= 3:
+            logger.info(f"Utente {user_name}: History della conversazione svuotata per ripetizione del contesto")
+        else:
+            logger.info(f"Utente {user_name}: Continuazione del contesto - {new_context}")	
+				
         # Verifica se l'utente chiede di contattare l'assistenza
         if any(keyword in user_message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
             bot_response = handle_assistance_request(user_name, user_message)
