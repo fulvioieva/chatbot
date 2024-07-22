@@ -18,6 +18,8 @@ from conversation_manager import ConversationManager, ConversationContext
 from email_leak_checker import check_email_leak
 from ip_checker import check_ip, url_to_ip
 
+ALLOWED_IP = '80.20.154.2'
+
 # Configurazione
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
@@ -117,8 +119,19 @@ def get_bot_presentation():
     # Se nessuna codifica funziona, usiamo una presentazione di fallback
     return "Sono un assistente virtuale specializzato in sicurezza informatica. Sono qui per aiutarti con domande su malware, controlli di email e IP, e altre questioni di cybersecurity."
 
+def restrict_to_ip(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        client_ip = request.remote_addr
+        if client_ip != ALLOWED_IP:
+            logger.warning(f"Tentativo di accesso bloccato da IP non autorizzato: {client_ip}")
+            abort(403)  # Forbidden
+        return f(*args, **kwargs)
+    return decorated_function	
+	
 @app.route('/chat', methods=['POST'])
 @error_handler
+@restrict_to_ip
 def chat():
     try:
         rate_limited_chat()
@@ -272,11 +285,13 @@ def chat():
 
 @app.route('/followup-list', methods=['GET'])
 @error_handler
+@restrict_to_ip
 def get_followup_list():
     return jsonify(followup_manager.get_followup_list())
 
 @app.route('/remove-from-followup', methods=['POST'])
 @error_handler
+@restrict_to_ip
 def remove_from_followup():
     user_name = request.json['user_name']
     followup_manager.remove_from_followup(user_name)
@@ -285,6 +300,7 @@ def remove_from_followup():
 
 
 @app.route('/update_knowledge', methods=['POST'])
+@restrict_to_ip
 def update_knowledge():
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
@@ -298,6 +314,7 @@ def update_knowledge():
         return jsonify({"message": "File updated successfully"}), 200
 		
 @app.route('/feedback', methods=['POST'])
+@restrict_to_ip
 def submit_feedback():
     user_name = request.json['user_name']
     feedback = request.json['feedback']
@@ -307,18 +324,21 @@ def submit_feedback():
     return jsonify({"message": "Grazie per il tuo feedback!"})		
 		
 @app.route('/threat-report', methods=['GET'])
+@restrict_to_ip
 def generate_threat_report():
     # Logica per generare un report sulle minacce rilevate
     report = generate_report()
     return jsonify(report)
 
 @app.route('/admin-notify', methods=['POST'])
+@restrict_to_ip
 def notify_admin():
     message = request.json['message']
     send_admin_notification(message)
     return jsonify({"message": "Notifica inviata all'amministratore"})
 	
 @app.route('/check-updates', methods=['GET'])
+@restrict_to_ip
 def check_for_updates():
     # Logica per verificare gli aggiornamenti disponibili
     updates = check_sophos_updates()
@@ -326,6 +346,7 @@ def check_for_updates():
 	
 @app.route('/debug/failed-attempts', methods=['GET'])
 @error_handler
+@restrict_to_ip
 def debug_failed_attempts():
     return jsonify(conversation_manager.failed_attempts)
 	
