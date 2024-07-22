@@ -2,3 +2,4 @@
 /venv
 /app/__pycache__
 /logs
+/app/followup_list.json
