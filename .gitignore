@@ -1,5 +1,5 @@
 .env
 /venv
-/app/__pycache__
+app/__pycache__
 /logs
-/app/followup_list.json
+app/followup_list.json
