@@ -67,13 +67,105 @@ def handle_assistance_request(user_name, user_message):
     return "La tua richiesta di assistenza è già stata registrata. Un operatore ti contatterà al più presto. Grazie per la tua pazienza."
 
 def handle_email_check(user_message):
-    email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', user_message)
+    logger.info(f"Messaggio utente [{user_message}]")
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    email_match = re.search(email_pattern, user_message, re.IGNORECASE)
+    
     if email_match:
         email = email_match.group(0)
-        leak_result = check_email_leak(email)
-        return f"Risultato del controllo email leak per {email}:\n{json.dumps(leak_result, indent=2)}"
-    return "Per favore, fornisci un indirizzo email da controllare."
+        try:
+            leak_result = check_email_leak(email)
+            
+            # Il risultato è già un dizionario, non c'è bisogno di decodificarlo
+            if not isinstance(leak_result, dict):
+                raise ValueError("Il risultato non è un dizionario come previsto")
+            
+            logger.info(f"Risultato grezzo del controllo email [{email}]: {json.dumps(leak_result, indent=2)}")
+            
+            formatted_result = format_leak_result(leak_result, email)
+            return formatted_result
+        except json.JSONDecodeError as e:
+            logger.error(f"Errore di decodifica JSON per {email}: {str(e)}")
+            return f"Si è verificato un errore nell'interpretazione del risultato per {email}. Per favore, riprova più tardi."
+        except KeyError as e:
+            logger.error(f"Chiave mancante nel risultato per {email}: {str(e)}")
+            return f"Il formato del risultato per {email} non è quello atteso. Per favore, contatta il supporto tecnico."
+        except ValueError as e:
+            logger.error(f"Errore nel formato del risultato per {email}: {str(e)}")
+            return f"Il formato del risultato per {email} non è valido. Per favore, contatta il supporto tecnico."
+        except Exception as e:
+            logger.error(f"Errore durante il controllo dell'email {email}: {str(e)}")
+            return f"Si è verificato un errore durante il controllo dell'email {email}. Per favore, riprova più tardi."
+    
+    return "Non ho trovato un indirizzo email valido nel messaggio. Per favore, inserisci un indirizzo email da controllare."
 
+def format_leak_result(result, email):
+    if not result or 'status' not in result or result['status'] != 'ok':
+        return f"Si è verificato un errore durante il controllo dell'email {email}. Per favore, riprova più tardi."
+
+    if result['message'] == "No public dataleak on it":
+        return f"Non sono state trovate fughe di dati pubbliche per l'email {email}.\n\n" \
+               "Tuttavia, è sempre una buona pratica:\n" \
+               "1. Utilizzare password uniche e complesse per ogni account.\n" \
+               "2. Attivare l'autenticazione a due fattori (2FA) dove possibile.\n" \
+               "3. Monitorare regolarmente l'attività dei tuoi account.\n" \
+               "4. Essere cauti con le email di phishing e i tentativi di ingegneria sociale."
+
+    if 'results' not in result or not result['results']:
+        return f"Non sono state trovate informazioni specifiche per l'email {email}."
+
+		
+    leaks = result['results']
+    unique_databases = set()
+    compromised_passwords = set()
+    hashed_passwords = set()
+    other_info = set()
+
+	
+    response = f"Risultato del controllo per {email}:\n\n"
+    response += f"Numero di fughe di dati rilevate: {len(leaks)}\n\n"
+
+    for leak in leaks:
+        if 'database_name' in leak and leak['database_name']:
+            unique_databases.add(leak['database_name'])
+        
+        if 'password' in leak and leak['password']:
+            compromised_passwords.add(leak['password'])
+        
+        if 'hashed_password' in leak and leak['hashed_password']:
+            hashed_passwords.add(leak['hashed_password'])
+        
+        for key, value in leak.items():
+            if value and key not in ['email', 'database_name', 'id', 'password', 'hashed_password']:
+                other_info.add(f"{key}: {value}")
+
+    response += f"Database compromessi: {', '.join(unique_databases)}\n\n"
+
+    if compromised_passwords:
+        response += "Password compromesse trovate (cambia immediatamente queste password):\n"
+        for password in compromised_passwords:
+            response += f"- {password}\n"
+        response += "\n"
+
+    if hashed_passwords:
+        response += f"Sono state trovate {len(hashed_passwords)} password hashate. Anche se non sono in chiaro, si consiglia di cambiarle.\n\n"
+
+    if other_info:
+        response += "Altre informazioni potenzialmente compromesse:\n"
+        for info in other_info:
+            response += f"- {info}\n"
+        response += "\n"
+
+    response += "Azioni consigliate:\n"
+    response += "1. Cambia immediatamente le password per tutti gli account associati a questa email, specialmente quelle elencate sopra.\n"
+    response += "2. Se hai usato le stesse password su altri account, cambiale anche lì.\n"
+    response += "3. Attiva l'autenticazione a due fattori (2FA) dove possibile.\n"
+    response += "4. Monitora attentamente l'attività dei tuoi account per eventuali accessi non autorizzati.\n"
+    response += "5. Sii cauto con le email di phishing o tentativi di ingegneria sociale.\n"
+    response += "6. Considera l'uso di un gestore di password per generare e memorizzare password uniche e complesse per ogni account.\n"
+	
+    return response
+	
 def handle_malware_related(user_name):
     with open(os.path.join(KNOWLEDGE_BASE_PATH, 'interceptx_malware_guide.json'), 'r') as f:
         intercept_x_info = json.load(f)
@@ -98,6 +190,7 @@ def handle_ip_or_url_check(user_message):
     if ip_match:
         ip_address = ip_match.group(0)
         ip_info = check_ip(ip_address)
+        logger.info(f"Risultato grezzo del controllo ip: {json.dumps(ip_info, indent=2)}")
         return f"Informazioni sull'indirizzo IP {ip_address}:\n{json.dumps(ip_info, indent=2)}"
     
     return "Non ho trovato un IP o URL valido nel messaggio. Puoi fornire un indirizzo IP o un URL da controllare?"
@@ -128,6 +221,24 @@ def restrict_to_ip(f):
             abort(403)  # Forbidden
         return f(*args, **kwargs)
     return decorated_function	
+
+def determine_context(message):
+    # Espressione regolare per identificare un indirizzo email
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    
+    if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
+        return "assistenza"
+    elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
+        return "ip_url_check"
+    elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware', 'malware?', 'virus?', 'spyware?']):
+        return "malware"
+    elif (any(keyword in message.lower() for keyword in ['mail', 'email', 'mail?', 'email?', 'posta', 'posta?']) and not any(keyword in message.lower() for keyword in ['ricevuto', 'mandato', 'sospetta'])) or re.search(email_pattern, message, re.IGNORECASE):
+        return "email_check"
+    else:
+        return "general"
+		
+def convert_newlines_to_html(text):
+    return text.replace('\n', '<br/>')
 	
 @app.route('/chat', methods=['POST'])
 @error_handler
@@ -149,19 +260,6 @@ def chat():
             logger.info(f"Utente {user_name}: Richiesta di presentazione del bot")
             return jsonify({"response": bot_response})
 
-
-        def determine_context(message):
-            if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
-                return "assistenza"
-            elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
-                return "ip_url_check"
-            elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware','malware?', 'virus?', 'spyware?']):
-                return "malware"
-            elif any(keyword in message.lower() for keyword in ['mail', 'email', 'mail?', 'email?', 'posta', 'posta?']):
-                return "email_check"
-            else:
-                return "general"
-
         new_context = determine_context(user_message)
         conversation_manager.set_context(user_name, new_context)
 
@@ -171,7 +269,7 @@ def chat():
         logger.info(f"Utente {user_name}: Contesto - {new_context}, Ripetizioni: {repeat_count}")
 
         if repeat_count == 0:
-            logger.info(f"Utente {user_name}: Nuovo contesto impostato - {new_context}")
+            logger.info(f"Utente {user_name}: Contesto impostato - {new_context}")
         elif repeat_count >= 3:
             logger.info(f"Utente {user_name}: History della conversazione svuotata per ripetizione del contesto")
         else:
@@ -217,7 +315,7 @@ def chat():
         elif context == "email_check":
             bot_response = handle_email_check(user_message)
             # Se non è stato fornito un indirizzo email valido, non chiamare Claude
-            if "Per favore, fornisci un indirizzo email da controllare." in bot_response:
+            if "Per favore, inserisci un indirizzo email da controllare." in bot_response:
                 conversation_manager.add_message(user_name, bot_response, is_user=False)
                 conversation_manager.add_context_message(user_name, bot_response)
                 return jsonify({"response": bot_response})
@@ -226,27 +324,36 @@ def chat():
         else:
             bot_response = handle_other_requests(user_message)
 
-        conversation_manager.add_context_message(user_name, user_message)
         conversation_manager.add_context_message(user_name, bot_response)
 
         # Costruisci il prompt per Claude solo se non siamo nel caso email_check senza email valida
-        if context != "email_check" or "Risultato del controllo email leak" in bot_response:
+        if context != "email_check":
+            conversation_manager.add_context_message(user_name, user_message)	
             context_messages = conversation_manager.get_context(user_name)['messages']
             conversation_history = "\n".join([f"{'Utente' if i % 2 == 0 else 'Assistente'}: {msg}" for i, msg in enumerate(context_messages)])
-            full_prompt = f"{BOT_INSTRUCTIONS}\n\nContesto corrente: {context}\n\nStorico della conversazione:\n{conversation_history}\n\nAssistente: Fornisci solo la tua risposta, non simulare domande o risposte dell'utente. Se stai facendo una lista trasformala in una lista ordinata HTML e se un link è presente trasformalo in un link HTML che apre un'altra pagina. Non dire che è richiesto il formato HTML"
+            full_prompt = f"{BOT_INSTRUCTIONS}\n\nContesto corrente: {context}\n\nStorico della conversazione:\n{conversation_history}\n\nAssistente: Fornisci solo la tua risposta, non simulare domande o risposte dell'utente."
+            #logger.info(f"Messaggio bot [{full_prompt}]")
 
-        # Ottieni la risposta da Claude
-        response = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=500,
-            temperature=0.1,
-            top_k=10,
-            messages=[
+            #logger.info(f"INFORMAZIONI [{context_messages}]")
+		
+			# Ottieni la risposta da Claude
+            response = client.messages.create(
+                model="claude-3-sonnet-20240229",
+                max_tokens=500,
+                temperature=0.1,
+                top_k=10,
+                messages=[
                 {"role": "user", "content": full_prompt}
-            ]
-        )
+                ]
+            )
 
-        bot_response = response.content[0].text
+            bot_response = response.content[0].text
+        else:
+            logger.info(f"Salto la richiesta a Claude")
+            bot_response = "\n".join([f"{msg}" for i, msg in enumerate(conversation_manager.get_context(user_name)['messages'])])
+            logger.info(f"Utente {user_name}: {bot_response}")
+            bot_response = convert_newlines_to_html(bot_response)
+            conversation_manager.clear_context(user_name)
 
         # Verifica se il problema è stato risolto
         if any(phrase in user_message.lower() for phrase in ["non è stato risolto", "non ho risolto", "da un operatore"]):
@@ -267,7 +374,7 @@ def chat():
                 logger.info(f"Utente {user_name}: Tentativo fallito numero {failed_attempts}")
         else:
             conversation_manager.reset_failed_attempts(user_name)
-
+            logger.info(f"Utente {user_name}: Reset di conversation manager")
         # Rimuovi eventuali parti della risposta che simulano l'input dell'utente
         bot_response = re.sub(r'Utente:.*', '', bot_response, flags=re.DOTALL).strip()
         
@@ -277,7 +384,7 @@ def chat():
         
         logger.info(f"Utente {user_name}: Risposta fornita nel contesto {context}")
             
-        return jsonify({"response": bot_response})
+        return jsonify({"response": convert_newlines_to_html(bot_response)})
     
     except Exception as e:
         logger.exception(f"Errore durante l'elaborazione della chat: {str(e)}")

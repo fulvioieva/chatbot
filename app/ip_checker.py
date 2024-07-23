@@ -20,7 +20,7 @@ def check_ip(ip_address):
         'x-rapidapi-host': "netdetective.p.rapidapi.com"
     }
     
-    conn.request("GET", f"/query?ip={ip_address}", headers=headers)
+    conn.request("GET", f"/query?ipaddress={ip_address}", headers=headers)
     res = conn.getresponse()
     data = res.read()
     
