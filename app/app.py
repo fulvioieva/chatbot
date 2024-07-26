@@ -1,6 +1,6 @@
 # app.py
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, abort
 import anthropic
 import os
 import re
@@ -68,7 +68,7 @@ def handle_assistance_request(user_name, user_message):
 
 def handle_email_check(user_message):
     logger.info(f"Messaggio utente [{user_message}]")
-    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    email_pattern = r'\b<?([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})>?\b'
     email_match = re.search(email_pattern, user_message, re.IGNORECASE)
     
     if email_match:
@@ -122,7 +122,7 @@ def format_leak_result(result, email):
     other_info = set()
 
 	
-    response = f"Risultato del controllo per {email}:\n\n"
+    response = f"è stato invocato un serivizio esterno per il controllo di {email}:\n\n"
     response += f"Numero di fughe di dati rilevate: {len(leaks)}\n\n"
 
     for leak in leaks:
@@ -150,19 +150,19 @@ def format_leak_result(result, email):
     if hashed_passwords:
         response += f"Sono state trovate {len(hashed_passwords)} password hashate. Anche se non sono in chiaro, si consiglia di cambiarle.\n\n"
 
-    if other_info:
-        response += "Altre informazioni potenzialmente compromesse:\n"
-        for info in other_info:
-            response += f"- {info}\n"
-        response += "\n"
+    #if other_info:
+    #    response += "Altre informazioni potenzialmente compromesse:\n"
+    #    for info in other_info:
+    #        response += f"- {info}\n"
+    #    response += "\n"
 
-    response += "Azioni consigliate:\n"
-    response += "1. Cambia immediatamente le password per tutti gli account associati a questa email, specialmente quelle elencate sopra.\n"
-    response += "2. Se hai usato le stesse password su altri account, cambiale anche lì.\n"
-    response += "3. Attiva l'autenticazione a due fattori (2FA) dove possibile.\n"
-    response += "4. Monitora attentamente l'attività dei tuoi account per eventuali accessi non autorizzati.\n"
-    response += "5. Sii cauto con le email di phishing o tentativi di ingegneria sociale.\n"
-    response += "6. Considera l'uso di un gestore di password per generare e memorizzare password uniche e complesse per ogni account.\n"
+    #response += "Azioni consigliate:\n"
+    #response += "1. Cambia immediatamente le password per tutti gli account associati a questa email, specialmente #quelle elencate sopra.\n"
+    #response += "2. Se hai usato le stesse password su altri account, cambiale anche lì.\n"
+    #response += "3. Attiva l'autenticazione a due fattori (2FA) dove possibile.\n"
+    #response += "4. Monitora attentamente l'attività dei tuoi account per eventuali accessi non autorizzati.\n"
+    #response += "5. Sii cauto con le email di phishing o tentativi di ingegneria sociale.\n"
+    #response += "6. Considera l'uso di un gestore di password per generare e memorizzare password uniche e complesse per ogni account.\n"
 	
     return response
 	
@@ -224,8 +224,7 @@ def restrict_to_ip(f):
 
 def determine_context(message):
     # Espressione regolare per identificare un indirizzo email
-    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-    
+    email_pattern = r'\b<?([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})>?\b'    
     if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
         return "assistenza"
     elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
@@ -293,7 +292,8 @@ def chat():
 
         # Determina il nuovo contesto basato sull'ultima domanda
         new_context = determine_context(user_message)
-
+        # Ottieni il contesto attuale
+        current_context = conversation_manager.get_context(user_name)
         # Cambia il contesto se è diverso dall'attuale o se non c'è un contesto corrente
         context_changed = False
         if not current_context or current_context.get('topic') != new_context:
@@ -301,14 +301,20 @@ def chat():
             logger.info(f"Utente {user_name}: Nuovo contesto impostato - {new_context}")
             context = new_context
             context_changed = True
+    
+            # Se il contesto è cambiato, svuota la history della conversazione
+            conversation_manager.clear_context_messages(user_name)
+            logger.info(f"Utente {user_name}: History della conversazione svuotata per nuovo contesto")
         else:
             context = current_context.get('topic')
             logger.info(f"Utente {user_name}: Continuazione del contesto - {context}")
 
-        # Se il contesto è cambiato, svuota la history della conversazione
-        if context_changed:
+         # Gestisci il conteggio delle ripetizioni
+        repeat_count = conversation_manager.get_context_repeat_count(user_name)
+        if repeat_count >= 5:
             conversation_manager.clear_context_messages(user_name)
-            logger.info(f"Utente {user_name}: History della conversazione svuotata per nuovo contesto")
+            logger.info(f"Utente {user_name}: History della conversazione svuotata per ripetizione del contesto")
+            conversation_manager.reset_context_repeat_count(user_name)
 
         if context == "ip_url_check":
             bot_response = handle_ip_or_url_check(user_message)
@@ -325,16 +331,15 @@ def chat():
             bot_response = handle_other_requests(user_message)
 
         conversation_manager.add_context_message(user_name, bot_response)
-
         # Costruisci il prompt per Claude solo se non siamo nel caso email_check senza email valida
-        if context != "email_check":
+        if context != "email_check" or not "Non sono state trovate fughe di dati pubbliche" in bot_response:
             conversation_manager.add_context_message(user_name, user_message)	
             context_messages = conversation_manager.get_context(user_name)['messages']
             conversation_history = "\n".join([f"{'Utente' if i % 2 == 0 else 'Assistente'}: {msg}" for i, msg in enumerate(context_messages)])
             full_prompt = f"{BOT_INSTRUCTIONS}\n\nContesto corrente: {context}\n\nStorico della conversazione:\n{conversation_history}\n\nAssistente: Fornisci solo la tua risposta, non simulare domande o risposte dell'utente."
             #logger.info(f"Messaggio bot [{full_prompt}]")
 
-            #logger.info(f"INFORMAZIONI [{context_messages}]")
+            
 		
 			# Ottieni la risposta da Claude
             response = client.messages.create(
@@ -358,6 +363,7 @@ def chat():
         # Verifica se il problema è stato risolto
         if any(phrase in user_message.lower() for phrase in ["non è stato risolto", "non ho risolto", "da un operatore"]):
             conversation_manager.increment_failed_attempts(user_name)
+            logger.info(f"Utente {user_name}: Increment di failed attempts")
             failed_attempts = conversation_manager.get_failed_attempts(user_name)
             
             if failed_attempts >= 2:
@@ -365,6 +371,7 @@ def chat():
                     followup_manager.add_to_followup(user_name, user_message)
                     bot_response = "\n\nHo notato che stai avendo difficoltà a risolvere il problema. Ho aggiunto il tuo nominativo alla lista per assistenza da parte di un operatore."
                     conversation_manager.reset_failed_attempts(user_name)
+                    logger.info(f"Utente {user_name}: Reset di failed attempts")
                     conversation_manager.clear_context(user_name)
                     logger.info(f"Utente {user_name}: Richiesta assistenza umana dopo ripetuti tentativi falliti")
                 else:
@@ -373,16 +380,18 @@ def chat():
                 bot_response = f"\n\nSe il problema persiste, prova a fornire più dettagli o a riformulare la tua domanda."
                 logger.info(f"Utente {user_name}: Tentativo fallito numero {failed_attempts}")
         else:
-            conversation_manager.reset_failed_attempts(user_name)
-            logger.info(f"Utente {user_name}: Reset di conversation manager")
-        # Rimuovi eventuali parti della risposta che simulano l'input dell'utente
-        bot_response = re.sub(r'Utente:.*', '', bot_response, flags=re.DOTALL).strip()
+            #conversation_manager.reset_failed_attempts(user_name)
+            #logger.info(f"Utente {user_name}: Reset di failed attempts")
+            # Rimuovi eventuali parti della risposta che simulano l'input dell'utente
+            bot_response = re.sub(r'Utente:.*', '', bot_response, flags=re.DOTALL).strip()
+            bot_response = re.sub(r'Umano:.*', '', bot_response, flags=re.DOTALL).strip()
         
         # Aggiungi la risposta del bot alla conversazione
         conversation_manager.add_message(user_name, bot_response, is_user=False)
         conversation_manager.add_context_message(user_name, bot_response)
         
-        logger.info(f"Utente {user_name}: Risposta fornita nel contesto {context}")
+        #logger.info(f"Utente {user_name}: Risposta fornita nel contesto {context}")
+        #logger.info(f"bot_response [{bot_response}]")
             
         return jsonify({"response": convert_newlines_to_html(bot_response)})
     
@@ -453,7 +462,6 @@ def check_for_updates():
 	
 @app.route('/debug/failed-attempts', methods=['GET'])
 @error_handler
-@restrict_to_ip
 def debug_failed_attempts():
     return jsonify(conversation_manager.failed_attempts)
 	
