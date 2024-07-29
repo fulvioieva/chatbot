@@ -1,0 +1,11 @@
+{
+  "data": [
+    {"message": "Come posso controllare se la mia email è stata compromessa?", "context": "email_check"},
+    {"message": "Ho un problema con un virus sul mio computer", "context": "malware"},
+    {"message": "Puoi verificare questo indirizzo IP?", "context": "ip_url_check"},
+    {"message": "Puoi verificare un sito", "context": "ip_url_check"},
+    {"message": "Posso parlare con un operatore", "context": "assistenza"},
+    {"message": "Ho bisogno di assistenza tecnica", "context": "assistenza"}
+  ],
+  "last_updated": "2023-07-26T10:00:00Z"
+}

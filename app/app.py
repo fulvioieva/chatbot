@@ -1,6 +1,13 @@
 # app.py
 
 from flask import Flask, request, jsonify, abort
+from datetime import datetime
+import schedule
+import time
+import threading
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import SVC
+import joblib
 import anthropic
 import os
 import re
@@ -9,7 +16,6 @@ import logging
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 from functools import wraps
-from ratelimit import limits, sleep_and_retry
 
 from knowledge_base import KnowledgeBase
 from bot_behavior import BOT_INSTRUCTIONS
@@ -44,11 +50,29 @@ kb = KnowledgeBase(KNOWLEDGE_BASE_PATH)
 followup_manager = FollowUpManager()
 conversation_manager = ConversationManager()
 
-# Decoratore per il rate limiting
-@sleep_and_retry
-@limits(calls=MAX_REQUESTS, period=REQUEST_WINDOW)
-def rate_limited_chat():
-    pass
+def rate_limit(limit, per):
+    def decorator(f):
+        last_reset = time.time()
+        calls = 0
+
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            nonlocal last_reset, calls
+            now = time.time()
+            
+            # Reset the counter if the time period has passed
+            if now - last_reset > per:
+                calls = 0
+                last_reset = now
+            
+            # Check if we've exceeded the limit
+            if calls >= limit:
+                return jsonify({"error": "Rate limit exceeded. Please try again later."}), 429
+            
+            calls += 1
+            return f(*args, **kwargs)
+        return wrapped
+    return decorator
 
 def error_handler(func):
     @wraps(func)
@@ -238,20 +262,115 @@ def determine_context(message):
 		
 def convert_newlines_to_html(text):
     return text.replace('\n', '<br/>')
+
+def load_training_data(file_path='training_data.json'):
+    encodings = ['utf-8', 'iso-8859-1', 'windows-1252']
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as file:
+                data = json.load(file)
+            return data['data'], data['last_updated']
+        except UnicodeDecodeError:
+            continue
+        except json.JSONDecodeError:
+            continue
+    
+    # Se nessuna codifica funziona, solleva un'eccezione
+    raise ValueError(f"Impossibile decodificare il file {file_path} con le codifiche note.")
+
+def save_training_data(data, file_path='training_data.json'):
+    with open(file_path, 'w') as file:
+        json.dump({
+            "data": data,
+            "last_updated": datetime.now().isoformat()
+        }, file, indent=2)
+
+def train_model(data):
+    messages = [item['message'] for item in data]
+    contexts = [item['context'] for item in data]
+
+    vectorizer = TfidfVectorizer(max_features=1000)
+    X = vectorizer.fit_transform(messages)
+    
+    model = SVC(kernel='linear')
+    model.fit(X, contexts)
+
+    joblib.dump(model, 'context_classifier.joblib')
+    joblib.dump(vectorizer, 'vectorizer.joblib')
+
+    return model, vectorizer
+
+def classify_context(message):
+    X = vectorizer.transform([message])
+    context = model.predict(X)[0]
+    return context
+
+def check_and_update_model():
+    global training_data, model, vectorizer, last_updated
+    
+    new_data, new_last_updated = load_training_data()
+    if new_last_updated > last_updated:
+        training_data = new_data
+        model, vectorizer = train_model(training_data)
+        last_updated = new_last_updated
+        logger.info("Modello aggiornato con nuovi dati di training")
+
+def run_scheduler():
+    schedule.every(1).hour.do(check_and_update_model)
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+def save_context_feedback(user_message, predicted_context, correct_context):
+    feedback_data = {
+        'timestamp': datetime.now().isoformat(),
+        'message': user_message,
+        'predicted_context': predicted_context,
+        'correct_context': correct_context
+    }
+    
+    with open('context_feedback.json', 'a') as f:
+        json.dump(feedback_data, f)
+        f.write('\n')  # Aggiungi una nuova riga per ogni feedback
+		
+# Carica il dataset iniziale e addestra il modello
+training_data, last_updated = load_training_data()
+model, vectorizer = train_model(training_data)
+
+# Avvia lo scheduler in un thread separato
+threading.Thread(target=run_scheduler, daemon=True).start()
+
 	
 @app.route('/chat', methods=['POST'])
 @error_handler
 @restrict_to_ip
+@rate_limit(MAX_REQUESTS, REQUEST_WINDOW)
 def chat():
     try:
-        rate_limited_chat()
-        
+
         user_message = request.json['message']
         user_name = request.json.get('user_name', 'Anonymous')
         
-        conversation_manager.add_message(user_name, user_message, is_user=True)
         current_context = conversation_manager.get_context(user_name)
-			
+        if current_context is None:
+            current_context = {'topic': None, 'messages': []}
+        
+        # Usa il classificatore ML come principale metodo di determinazione del contesto
+        new_context = classify_context(user_message)
+        
+        # Usa determine_context come fallback o per casi specifici
+        if new_context == "general" or new_context is None:
+            new_context = determine_context(user_message)
+        
+        if current_context.get('topic') != new_context:
+            conversation_manager.set_context(user_name, new_context)
+            logger.info(f"Utente {user_name}: Nuovo contesto impostato - {new_context}")
+            context = new_context
+            conversation_manager.clear_context_messages(user_name)
+        else:
+            context = current_context.get('topic')
+            logger.info(f"Utente {user_name}: Continuazione del contesto - {context}")
+
         # Gestisci la richiesta di presentazione
         if user_message.lower() in ["ciao, presentati in 2 righe!", "presentati", "chi sei?"]:
             bot_response = get_bot_presentation()
@@ -464,6 +583,19 @@ def check_for_updates():
 @error_handler
 def debug_failed_attempts():
     return jsonify(conversation_manager.failed_attempts)
+
+@app.route('/update-training-data', methods=['GET'])
+#@restrict_to_ip
+def update_training_data():
+    global training_data, model, vectorizer
+    
+    new_data = request.json['data']
+    training_data.extend(new_data)
+    
+    save_training_data(training_data)
+    model, vectorizer = train_model(training_data)
+    
+    return jsonify({"message": "Dataset aggiornato e modello riaddestrato con successo"})
 	
 if __name__ == '__main__':
     app.run(debug=DEBUG, host='0.0.0.0')
