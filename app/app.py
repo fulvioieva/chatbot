@@ -32,6 +32,7 @@ ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 KNOWLEDGE_BASE_PATH = os.getenv('KNOWLEDGE_BASE_PATH', '/app/external_knowledge')
 MAX_REQUESTS = int(os.getenv('MAX_REQUESTS', 100))
 REQUEST_WINDOW = int(os.getenv('REQUEST_WINDOW', 60))
+port = int(os.getenv('PORT'))
 
 # Configurazione del logging
 logging.basicConfig(level=logging.INFO if DEBUG else logging.WARNING,
@@ -249,17 +250,32 @@ def restrict_to_ip(f):
 def determine_context(message):
     # Espressione regolare per identificare un indirizzo email
     email_pattern = r'\b<?([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})>?\b'    
-    if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
-        return "assistenza"
-    elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
-        return "ip_url_check"
-    elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware', 'malware?', 'virus?', 'spyware?']):
-        return "malware"
-    elif (any(keyword in message.lower() for keyword in ['mail', 'email', 'mail?', 'email?', 'posta', 'posta?']) and not any(keyword in message.lower() for keyword in ['ricevuto', 'mandato', 'sospetta'])) or re.search(email_pattern, message, re.IGNORECASE):
-        return "email_check"
+    
+    # Se il messaggio è lungo, non considerarlo automaticamente come email_check
+    if is_long_message(message):
+        #logger.info(f"Messaggio lungo {is_long_message(message)}")
+        if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
+            return "assistenza"
+        elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
+            return "ip_url_check"
+        elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware', 'malware?', 'virus?', 'spyware?']):
+            return "malware"
+        else:
+            return "general"
     else:
-        return "general"
-		
+        # Logica esistente per messaggi non lunghi
+        #logger.info(f"Messaggio corto {is_long_message(message)}")
+        if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
+            return "assistenza"
+        elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
+            return "ip_url_check"
+        elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware', 'malware?', 'virus?', 'spyware?']):
+            return "malware"
+        elif (any(keyword in message.lower() for keyword in ['mail', 'email', 'mail?', 'email?', 'posta', 'posta?']) and not any(keyword in message.lower() for keyword in ['ricevuto', 'mandato', 'sospetta'])) or re.search(email_pattern, message, re.IGNORECASE):
+            return "email_check"
+        else:
+            return "general"		
+
 def convert_newlines_to_html(text):
     return text.replace('\n', '<br/>')
 
@@ -332,7 +348,28 @@ def save_context_feedback(user_message, predicted_context, correct_context):
     with open('context_feedback.json', 'a') as f:
         json.dump(feedback_data, f)
         f.write('\n')  # Aggiungi una nuova riga per ogni feedback
-		
+
+def is_long_message(message, threshold=30):
+    """
+    Determina se un messaggio è considerato lungo.
+    Args:
+    message (str): Il messaggio da valutare
+    threshold (int): Il numero di parole oltre il quale un messaggio è considerato lungo
+    
+    Returns:
+    bool: True se il messaggio è lungo, False altrimenti
+    """
+    if not isinstance(message, str):
+        logging.warning(f"is_long_message received non-string input: {type(message)}")
+        return False
+    
+    words = message.split()
+    word_count = len(words)
+    is_long = word_count > threshold
+    
+    logging.info(f"Message length: {word_count} words. Threshold: {threshold}. Is long: {is_long}")
+    
+    return is_long		
 # Carica il dataset iniziale e addestra il modello
 training_data, last_updated = load_training_data()
 model, vectorizer = train_model(training_data)
@@ -355,21 +392,22 @@ def chat():
         if current_context is None:
             current_context = {'topic': None, 'messages': []}
         
-        # Usa il classificatore ML come principale metodo di determinazione del contesto
-        new_context = classify_context(user_message)
+        # Usa il classificatore ML per prevedere il contesto
+        predicted_context = classify_context(user_message)
         
-        # Usa determine_context come fallback o per casi specifici
-        if new_context == "general" or new_context is None:
-            new_context = determine_context(user_message)
+        # Usa determine_context per ottenere il contesto basato su regole
+        rule_based_context = determine_context(user_message)
         
-        if current_context.get('topic') != new_context:
-            conversation_manager.set_context(user_name, new_context)
-            logger.info(f"Utente {user_name}: Nuovo contesto impostato - {new_context}")
-            context = new_context
-            conversation_manager.clear_context_messages(user_name)
+        # Decide quale contesto utilizzare
+        if is_long_message(user_message):
+            new_context = "general"  # Per messaggi lunghi, usa sempre "general"
+        elif predicted_context == "general" or predicted_context is None:
+            new_context = rule_based_context
         else:
-            context = current_context.get('topic')
-            logger.info(f"Utente {user_name}: Continuazione del contesto - {context}")
+            new_context = predicted_context
+
+        #logger.info(f"Utente {user_name}: Lunghezza messaggio - {len(user_message)} caratteri")
+        logger.info(f"Utente {user_name}: Contesto ML - {predicted_context}, Contesto basato su regole - {rule_based_context}, Contesto finale - {new_context}")
 
         # Gestisci la richiesta di presentazione
         if user_message.lower() in ["ciao, presentati in 2 righe!", "presentati", "chi sei?"]:
@@ -394,7 +432,7 @@ def chat():
             logger.info(f"Utente {user_name}: Continuazione del contesto - {new_context}")	
 				
         # Verifica se l'utente chiede di contattare l'assistenza
-        if any(keyword in user_message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
+        if any(keyword in user_message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza','contattare un tecnico','parlare con un tecnico']):
             bot_response = handle_assistance_request(user_name, user_message)
             conversation_manager.add_message(user_name, bot_response, is_user=False)
             logger.info(f"Utente {user_name}: Richiesta assistenza operatore")
@@ -598,4 +636,4 @@ def update_training_data():
     return jsonify({"message": "Dataset aggiornato e modello riaddestrato con successo"})
 	
 if __name__ == '__main__':
-    app.run(debug=DEBUG, host='0.0.0.0')
+    app.run(debug=DEBUG, host='0.0.0.0', port=port)

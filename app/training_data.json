@@ -5,7 +5,8 @@
     {"message": "Puoi verificare questo indirizzo IP?", "context": "ip_url_check"},
     {"message": "Puoi verificare un sito", "context": "ip_url_check"},
     {"message": "Posso parlare con un operatore", "context": "assistenza"},
-    {"message": "Ho bisogno di assistenza tecnica", "context": "assistenza"}
+    {"message": "Ho bisogno di assistenza tecnica", "context": "assistenza"},
+    {"message": "Ho ricevuto una mail con un link sospetto", "context": "general"}
   ],
-  "last_updated": "2023-07-26T10:00:00Z"
+  "last_updated": "2023-07-30T10:00:00Z"
 }
