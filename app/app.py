@@ -23,6 +23,7 @@ from followup_manager import FollowUpManager
 from conversation_manager import ConversationManager, ConversationContext
 from email_leak_checker import check_email_leak
 from ip_checker import check_ip, url_to_ip
+from ip_quality_check import check_ip_quality
 
 ALLOWED_IP = '80.20.154.2'
 
@@ -200,25 +201,37 @@ def handle_other_requests(user_message):
     relevant_info = kb.get_relevant_info(user_message)
     return f"Informazioni rilevanti dalla knowledge base:\n" + "\n".join(str(info) for info in relevant_info)
 
-def handle_ip_or_url_check(user_message):
+def handle_ip_or_url_check(user_message, use_quality_check=False):
     url_match = re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', user_message)
+    ip_match = re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', user_message)
+    
     if url_match:
         url = url_match.group(0)
         ip_address = url_to_ip(url)
         if ip_address:
-            ip_info = check_ip(ip_address)
+            if use_quality_check:
+                ip_info = check_ip_quality(ip_address)
+                if ip_info is None:
+                    return "Mi dispiace, non sono riuscito a ottenere informazioni sulla qualità di questo IP. Potrebbe esserci un problema con il servizio di controllo."
+                elif 'error' in ip_info:
+                    return f"Si è verificato un problema durante il controllo dell'IP: {ip_info['error']}"
+            else:
+                ip_info = check_ip(ip_address)
             return f"Informazioni sull'URL {url} (IP: {ip_address}):\n{json.dumps(ip_info, indent=2)}"
         else:
             return f"Non è stato possibile risolvere l'URL {url} in un indirizzo IP."
     
-    ip_match = re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', user_message)
     if ip_match:
         ip_address = ip_match.group(0)
-        ip_info = check_ip(ip_address)
+        if use_quality_check:
+            ip_info = check_ip_quality(ip_address)
+        else:
+            ip_info = check_ip(ip_address)
         logger.info(f"Risultato grezzo del controllo ip: {json.dumps(ip_info, indent=2)}")
         return f"Informazioni sull'indirizzo IP {ip_address}:\n{json.dumps(ip_info, indent=2)}"
     
     return "Non ho trovato un IP o URL valido nel messaggio. Puoi fornire un indirizzo IP o un URL da controllare?"
+
 
 def get_bot_presentation():
     file_path = os.path.join(KNOWLEDGE_BASE_PATH, 'bot_presentation.txt')
@@ -257,6 +270,8 @@ def determine_context(message):
         if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
             return "assistenza"
         elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
+            if "controllo esteso" in message.lower() or "quality check" in message.lower():
+                return "ip_url_quality_check"
             return "ip_url_check"
         elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware', 'malware?', 'virus?', 'spyware?']):
             return "malware"
@@ -268,6 +283,8 @@ def determine_context(message):
         if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
             return "assistenza"
         elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
+            if "controllo esteso" in message.lower() or "quality check" in message.lower():
+                return "ip_url_quality_check"
             return "ip_url_check"
         elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware', 'malware?', 'virus?', 'spyware?']):
             return "malware"
@@ -369,7 +386,8 @@ def is_long_message(message, threshold=30):
     
     logging.info(f"Message length: {word_count} words. Threshold: {threshold}. Is long: {is_long}")
     
-    return is_long		
+    return is_long
+
 # Carica il dataset iniziale e addestra il modello
 training_data, last_updated = load_training_data()
 model, vectorizer = train_model(training_data)
@@ -474,7 +492,11 @@ def chat():
             conversation_manager.reset_context_repeat_count(user_name)
 
         if context == "ip_url_check":
-            bot_response = handle_ip_or_url_check(user_message)
+            logger.info(f"Utente {user_name}: Controllo normale")		
+            bot_response = handle_ip_or_url_check(user_message, use_quality_check=False)
+        elif context == "ip_url_quality_check":
+            logger.info(f"Utente {user_name}: Controllo esteso")				
+            bot_response = handle_ip_or_url_check(user_message, use_quality_check=True)
         elif context == "email_check":
             bot_response = handle_email_check(user_message)
             # Se non è stato fornito un indirizzo email valido, non chiamare Claude
