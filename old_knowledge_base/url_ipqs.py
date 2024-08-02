@@ -17,7 +17,7 @@ if __name__ == "__main__":
     """
     URL to scan - URL Encoded in cURL function below.
     """
-    URL = 'http://www.syncroweb.it'
+    URL = '209.141.51.21'
 
     #Adjustable strictness level from 0 to 2. 0 is the least strict and recommended for most use cases. Higher strictness levels can increase false-positives.
     strictness = 0

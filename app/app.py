@@ -24,7 +24,7 @@ from conversation_manager import ConversationManager, ConversationContext
 from email_leak_checker import check_email_leak
 from ip_checker import check_ip, url_to_ip
 
-ALLOWED_IP = '80.20.154.2'
+ALLOWED_IPS = ['80.20.154.2','79.7.71.142','217.201.215.197']
 
 # Configurazione
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
@@ -32,6 +32,7 @@ ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 KNOWLEDGE_BASE_PATH = os.getenv('KNOWLEDGE_BASE_PATH', '/app/external_knowledge')
 MAX_REQUESTS = int(os.getenv('MAX_REQUESTS', 100))
 REQUEST_WINDOW = int(os.getenv('REQUEST_WINDOW', 60))
+port = int(os.getenv('PORT'))
 
 # Configurazione del logging
 logging.basicConfig(level=logging.INFO if DEBUG else logging.WARNING,
@@ -240,7 +241,8 @@ def restrict_to_ip(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         client_ip = request.remote_addr
-        if client_ip != ALLOWED_IP:
+        logger.info(f"Richiesta ricevuta da IP: {client_ip}")
+        if client_ip not in ALLOWED_IPS:
             logger.warning(f"Tentativo di accesso bloccato da IP non autorizzato: {client_ip}")
             abort(403)  # Forbidden
         return f(*args, **kwargs)
@@ -598,4 +600,4 @@ def update_training_data():
     return jsonify({"message": "Dataset aggiornato e modello riaddestrato con successo"})
 	
 if __name__ == '__main__':
-    app.run(debug=DEBUG, host='0.0.0.0')
+    app.run(debug=DEBUG, host='0.0.0.0', port=port)
