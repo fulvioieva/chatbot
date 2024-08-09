@@ -23,6 +23,7 @@ from followup_manager import FollowUpManager
 from conversation_manager import ConversationManager, ConversationContext
 from email_leak_checker import check_email_leak
 from ip_checker import check_ip, url_to_ip
+from ip_quality_check import check_ip_quality
 
 ALLOWED_IPS = ['80.20.154.2','79.7.71.142','217.201.215.197']
 
@@ -200,25 +201,37 @@ def handle_other_requests(user_message):
     relevant_info = kb.get_relevant_info(user_message)
     return f"Informazioni rilevanti dalla knowledge base:\n" + "\n".join(str(info) for info in relevant_info)
 
-def handle_ip_or_url_check(user_message):
+def handle_ip_or_url_check(user_message, use_quality_check=False):
     url_match = re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', user_message)
+    ip_match = re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', user_message)
+    
     if url_match:
         url = url_match.group(0)
         ip_address = url_to_ip(url)
         if ip_address:
-            ip_info = check_ip(ip_address)
+            if use_quality_check:
+                ip_info = check_ip_quality(ip_address)
+                if ip_info is None:
+                    return "Mi dispiace, non sono riuscito a ottenere informazioni sulla qualità di questo IP. Potrebbe esserci un problema con il servizio di controllo."
+                elif 'error' in ip_info:
+                    return f"Si è verificato un problema durante il controllo dell'IP: {ip_info['error']}"
+            else:
+                ip_info = check_ip(ip_address)
             return f"Informazioni sull'URL {url} (IP: {ip_address}):\n{json.dumps(ip_info, indent=2)}"
         else:
             return f"Non è stato possibile risolvere l'URL {url} in un indirizzo IP."
     
-    ip_match = re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', user_message)
     if ip_match:
         ip_address = ip_match.group(0)
-        ip_info = check_ip(ip_address)
+        if use_quality_check:
+            ip_info = check_ip_quality(ip_address)
+        else:
+            ip_info = check_ip(ip_address)
         logger.info(f"Risultato grezzo del controllo ip: {json.dumps(ip_info, indent=2)}")
         return f"Informazioni sull'indirizzo IP {ip_address}:\n{json.dumps(ip_info, indent=2)}"
     
     return "Non ho trovato un IP o URL valido nel messaggio. Puoi fornire un indirizzo IP o un URL da controllare?"
+
 
 def get_bot_presentation():
     file_path = os.path.join(KNOWLEDGE_BASE_PATH, 'bot_presentation.txt')
@@ -251,17 +264,36 @@ def restrict_to_ip(f):
 def determine_context(message):
     # Espressione regolare per identificare un indirizzo email
     email_pattern = r'\b<?([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,})>?\b'    
-    if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
-        return "assistenza"
-    elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
-        return "ip_url_check"
-    elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware', 'malware?', 'virus?', 'spyware?']):
-        return "malware"
-    elif (any(keyword in message.lower() for keyword in ['mail', 'email', 'mail?', 'email?', 'posta', 'posta?']) and not any(keyword in message.lower() for keyword in ['ricevuto', 'mandato', 'sospetta'])) or re.search(email_pattern, message, re.IGNORECASE):
-        return "email_check"
+    
+    # Se il messaggio è lungo, non considerarlo automaticamente come email_check
+    if is_long_message(message):
+        #logger.info(f"Messaggio lungo {is_long_message(message)}")
+        if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
+            return "assistenza"
+        elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
+            if "controllo esteso" in message.lower() or "quality check" in message.lower():
+                return "ip_url_quality_check"
+            return "ip_url_check"
+        elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware', 'malware?', 'virus?', 'spyware?']):
+            return "malware"
+        else:
+            return "general"
     else:
-        return "general"
-		
+        # Logica esistente per messaggi non lunghi
+        #logger.info(f"Messaggio corto {is_long_message(message)}")
+        if any(keyword in message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
+            return "assistenza"
+        elif re.search(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', message) or re.search(r'https?://(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', message):
+            if "controllo esteso" in message.lower() or "quality check" in message.lower():
+                return "ip_url_quality_check"
+            return "ip_url_check"
+        elif any(keyword in message.lower() for keyword in ['malware', 'virus', 'spyware', 'malware?', 'virus?', 'spyware?']):
+            return "malware"
+        elif (any(keyword in message.lower() for keyword in ['mail', 'email', 'mail?', 'email?', 'posta', 'posta?']) and not any(keyword in message.lower() for keyword in ['ricevuto', 'mandato', 'sospetta'])) or re.search(email_pattern, message, re.IGNORECASE):
+            return "email_check"
+        else:
+            return "general"		
+
 def convert_newlines_to_html(text):
     return text.replace('\n', '<br/>')
 
@@ -334,7 +366,29 @@ def save_context_feedback(user_message, predicted_context, correct_context):
     with open('context_feedback.json', 'a') as f:
         json.dump(feedback_data, f)
         f.write('\n')  # Aggiungi una nuova riga per ogni feedback
-		
+
+def is_long_message(message, threshold=30):
+    """
+    Determina se un messaggio è considerato lungo.
+    Args:
+    message (str): Il messaggio da valutare
+    threshold (int): Il numero di parole oltre il quale un messaggio è considerato lungo
+    
+    Returns:
+    bool: True se il messaggio è lungo, False altrimenti
+    """
+    if not isinstance(message, str):
+        logging.warning(f"is_long_message received non-string input: {type(message)}")
+        return False
+    
+    words = message.split()
+    word_count = len(words)
+    is_long = word_count > threshold
+    
+    logging.info(f"Message length: {word_count} words. Threshold: {threshold}. Is long: {is_long}")
+    
+    return is_long
+
 # Carica il dataset iniziale e addestra il modello
 training_data, last_updated = load_training_data()
 model, vectorizer = train_model(training_data)
@@ -357,25 +411,27 @@ def chat():
         if current_context is None:
             current_context = {'topic': None, 'messages': []}
         
-        # Usa il classificatore ML come principale metodo di determinazione del contesto
-        new_context = classify_context(user_message)
+        # Usa il classificatore ML per prevedere il contesto
+        predicted_context = classify_context(user_message)
         
-        # Usa determine_context come fallback o per casi specifici
-        if new_context == "general" or new_context is None:
-            new_context = determine_context(user_message)
+        # Usa determine_context per ottenere il contesto basato su regole
+        rule_based_context = determine_context(user_message)
         
-        if current_context.get('topic') != new_context:
-            conversation_manager.set_context(user_name, new_context)
-            logger.info(f"Utente {user_name}: Nuovo contesto impostato - {new_context}")
-            context = new_context
-            conversation_manager.clear_context_messages(user_name)
+        # Decide quale contesto utilizzare
+        if is_long_message(user_message):
+            new_context = "general"  # Per messaggi lunghi, usa sempre "general"
+        elif predicted_context == "general" or predicted_context is None:
+            new_context = rule_based_context
         else:
-            context = current_context.get('topic')
-            logger.info(f"Utente {user_name}: Continuazione del contesto - {context}")
+            new_context = predicted_context
+
+        #logger.info(f"Utente {user_name}: Lunghezza messaggio - {len(user_message)} caratteri")
+        logger.info(f"Utente {user_name}: Contesto ML - {predicted_context}, Contesto basato su regole - {rule_based_context}, Contesto finale - {new_context}")
 
         # Gestisci la richiesta di presentazione
         if user_message.lower() in ["ciao, presentati in 2 righe!", "presentati", "chi sei?"]:
             bot_response = get_bot_presentation()
+            conversation_manager.clear_context_messages(user_name)
             conversation_manager.add_message(user_name, bot_response, is_user=False)
             logger.info(f"Utente {user_name}: Richiesta di presentazione del bot")
             return jsonify({"response": bot_response})
@@ -388,15 +444,15 @@ def chat():
 
         logger.info(f"Utente {user_name}: Contesto - {new_context}, Ripetizioni: {repeat_count}")
 
-        if repeat_count == 0:
-            logger.info(f"Utente {user_name}: Contesto impostato - {new_context}")
-        elif repeat_count >= 3:
-            logger.info(f"Utente {user_name}: History della conversazione svuotata per ripetizione del contesto")
-        else:
-            logger.info(f"Utente {user_name}: Continuazione del contesto - {new_context}")	
+        #if repeat_count == 0:
+        #    logger.info(f"Utente {user_name}: Contesto impostato - {new_context}")
+        #elif repeat_count >= 3:
+        #    logger.info(f"Utente {user_name}: History della conversazione svuotata per ripetizione del contesto")
+        #else:
+        #    logger.info(f"Utente {user_name}: Continuazione del contesto - {new_context}")	
 				
         # Verifica se l'utente chiede di contattare l'assistenza
-        if any(keyword in user_message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza']):
+        if any(keyword in user_message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza','contattare un tecnico','parlare con un tecnico']):
             bot_response = handle_assistance_request(user_name, user_message)
             conversation_manager.add_message(user_name, bot_response, is_user=False)
             logger.info(f"Utente {user_name}: Richiesta assistenza operatore")
@@ -438,7 +494,11 @@ def chat():
             conversation_manager.reset_context_repeat_count(user_name)
 
         if context == "ip_url_check":
-            bot_response = handle_ip_or_url_check(user_message)
+            logger.info(f"Utente {user_name}: Controllo normale")		
+            bot_response = handle_ip_or_url_check(user_message, use_quality_check=False)
+        elif context == "ip_url_quality_check":
+            logger.info(f"Utente {user_name}: Controllo esteso")				
+            bot_response = handle_ip_or_url_check(user_message, use_quality_check=True)
         elif context == "email_check":
             bot_response = handle_email_check(user_message)
             # Se non è stato fornito un indirizzo email valido, non chiamare Claude
