@@ -25,7 +25,7 @@ from email_leak_checker import check_email_leak
 from ip_checker import check_ip, url_to_ip
 from ip_quality_check import check_ip_quality
 
-ALLOWED_IP = '80.20.154.2'
+ALLOWED_IPS = ['80.20.154.2','79.7.71.142','217.201.215.197']
 
 # Configurazione
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
@@ -254,7 +254,8 @@ def restrict_to_ip(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         client_ip = request.remote_addr
-        if client_ip != ALLOWED_IP:
+        logger.info(f"Richiesta ricevuta da IP: {client_ip}")
+        if client_ip not in ALLOWED_IPS:
             logger.warning(f"Tentativo di accesso bloccato da IP non autorizzato: {client_ip}")
             abort(403)  # Forbidden
         return f(*args, **kwargs)
@@ -430,6 +431,7 @@ def chat():
         # Gestisci la richiesta di presentazione
         if user_message.lower() in ["ciao, presentati in 2 righe!", "presentati", "chi sei?"]:
             bot_response = get_bot_presentation()
+            conversation_manager.clear_context_messages(user_name)
             conversation_manager.add_message(user_name, bot_response, is_user=False)
             logger.info(f"Utente {user_name}: Richiesta di presentazione del bot")
             return jsonify({"response": bot_response})
@@ -442,12 +444,12 @@ def chat():
 
         logger.info(f"Utente {user_name}: Contesto - {new_context}, Ripetizioni: {repeat_count}")
 
-        if repeat_count == 0:
-            logger.info(f"Utente {user_name}: Contesto impostato - {new_context}")
-        elif repeat_count >= 3:
-            logger.info(f"Utente {user_name}: History della conversazione svuotata per ripetizione del contesto")
-        else:
-            logger.info(f"Utente {user_name}: Continuazione del contesto - {new_context}")	
+        #if repeat_count == 0:
+        #    logger.info(f"Utente {user_name}: Contesto impostato - {new_context}")
+        #elif repeat_count >= 3:
+        #    logger.info(f"Utente {user_name}: History della conversazione svuotata per ripetizione del contesto")
+        #else:
+        #    logger.info(f"Utente {user_name}: Continuazione del contesto - {new_context}")	
 				
         # Verifica se l'utente chiede di contattare l'assistenza
         if any(keyword in user_message.lower() for keyword in ['contattare assistenza', 'parlare con un operatore', 'supporto tecnico', 'assistenza umana', 'assistenza cyber', 'bisogno di assistenza','contattare un tecnico','parlare con un tecnico']):
